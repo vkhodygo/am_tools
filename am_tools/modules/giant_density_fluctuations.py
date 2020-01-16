@@ -33,7 +33,7 @@ class GiantDensityFluctuations:
 		col_names = ('x', 'y')
 		if not os.path.isfile(file_path):
 			if not os.path.isfile(fp_ % 'data.zip'):
-				verbose and print("\nNo (un)zipped data, skipping.\n" % file_)
+				verbose and print("\nNo (un)zipped data, skipping.\n")
 				return None
 			else:
 				try:
@@ -86,9 +86,8 @@ class GiantDensityFluctuations:
 				f = int(domain_size[i] / bin_size[i])
 				bins.append(f)
 				factor /= f
-			xedges = linspace(0, domain_size[0], bins[0] + 1)
-			yedges = linspace(0, domain_size[1], bins[1] + 1)
-			return bins, factor * population, (xedges, yedges)
+			edges = (linspace(0, domain_size[0], bins[0] + 1), linspace(0, domain_size[1], bins[1] + 1))
+			return bins, factor * population, edges
 
 	@staticmethod
 	def density_fluctuations(x, y, av_density, edges):

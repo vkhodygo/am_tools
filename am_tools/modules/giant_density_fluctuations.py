@@ -12,8 +12,23 @@ from tqdm import tqdm
 
 
 class GiantDensityFluctuations:
+	"""
+	This class provides functions for data loading and for actual calculations of giant density fluctuations.
+	"""
 	@staticmethod
 	def load_file(fp_, file_, chs=100000, ci=(2, 3), cn=('x', 'y'), dt=float16, file_known=False, file_l=None, v=False):
+		"""
+		This function reads required data from the file_ or, when all data is zipped, from file in data.zip.
+		:param fp_: file path template
+		:param file_: file name
+		:param chs: the size of a single data chunk
+		:param ci: column indices
+		:param dt: data type
+		:param file_known: a parameter showing if there is any knowledge about the data file size
+		:param file_l: if file_known is true, this is the file length
+		:param verbose: if True the function describes the process of file loading, including possible errors
+		:return: a pandas dataframe or None if there is no data to read/the data is corrupted
+		"""
 		file_path = fp_ % file_
 
 		if not os.path.isfile(file_path):
@@ -52,6 +67,15 @@ class GiantDensityFluctuations:
 
 	@staticmethod
 	def density(population, domain_size, bin_size, verbose=False):
+		"""
+		This function calculates the average number density per bin
+		:param population: number of particles
+		:param domain_size: a tuple that contains the sizes of a rectangular domain
+		:param bin_size: a tuple that contains the sizes of a single bin
+		:param verbose: if True, the function prints an error message in the case of incorrect parameters
+		:return: bins, an array containing the number of bins in x and y directions, average bin density,
+		positions of bin edges for further 2d histogram construction
+		"""
 		if len(domain_size) != len(bin_size):
 			print("\nIncorrect domain or binning parameters, exiting.\n") if verbose else None
 			exit(1)
@@ -68,6 +92,14 @@ class GiantDensityFluctuations:
 
 	@staticmethod
 	def den_fl(x, y, av_density, edges):
+		"""
+		This function calculates giant density fluctuations using provided particle positions and bin edges
+		:param x: x coordinate of particles
+		:param y: y coordinate of particles
+		:param av_density: average bin density
+		:param edges: bin edges
+		:return: the normalized value of density fluctuations
+		"""
 		h, _, _ = histogram2d(x, y, bins=(edges[0], edges[1]))
 		h -= av_density
 		return sqrt(mean(multiply(h, h))) / sqrt(av_density)
@@ -97,6 +129,12 @@ class GDFanalysis(GiantDensityFluctuations):
 		self.samples = 80000
 
 	def get_parameters(self):
+		"""
+		All parameters for the simulations are provided as an external JSON string,
+		actual usage looks like this:
+		echo  '{"path": "/path/%s"}' | python script.py
+		:return: None
+		"""
 		try:
 			sys_par = json.load(sys.stdin)
 		except json.JSONDecodeError:
@@ -123,6 +161,10 @@ class GDFanalysis(GiantDensityFluctuations):
 
 	@staticmethod
 	def load_additional_parameters():
+		"""
+		Basic function that retuns bin sizes for the default confinement geometry
+		:return: two arrays, each of them contains bin sizes in the corresponding direction
+		"""
 		# TODO replace this function
 		f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5]
 		f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2]
@@ -133,6 +175,14 @@ class GDFanalysis(GiantDensityFluctuations):
 		return xbinsizes, ybinsizes
 
 	def general_sub_pipeline(self, df_, xb, yb):
+		"""
+		This function goes through the provided number of samples and calculates density fluctuations for
+		all provided bin sizes
+		:param df_: a pandas dataframe
+		:param xb: bin sizes in x direction
+		:param yb: bin sizes in y direction
+		:return: an array containing the resulting data
+		"""
 		data = zeros((self.samples, len(xb) * len(yb)))
 		x_v, y_v = df_['x'].to_numpy(), df_['y'].to_numpy()  # turn to numpy first, it's ~2 times faster
 		iterator = tqdm(product(xb, yb), total=len(xb) * len(yb)) if self.verbose else product(xb, yb)
@@ -168,11 +218,22 @@ class GDFanalysis(GiantDensityFluctuations):
 
 	@staticmethod
 	def save_proc_data(data, save_path):
-		savetxt(save_path % "gdf_test.txt", data.T, fmt='%.2e')
+		"""
+		Saves the resulting array.
+		:param data: array name
+		:param save_path: path to the file
+		:return: None
+		"""
 		return None
 
 	@staticmethod
 	def plot_figure(data, save_path):
+		"""
+		Plots a gdf figure and saves it.
+		:param data: data to plot
+		:param save_path: path to the figure
+		:return: None
+		"""
 		plt.figure()
 		plt.yscale('log')
 		plt.xscale('log')
@@ -181,6 +242,11 @@ class GDFanalysis(GiantDensityFluctuations):
 		return None
 
 	def serial_data_pipeline(self):
+		"""
+		This function is a pipeline for serial data processing.
+		It gets parameters, collects and processes the corresponding data.
+		:return: None
+		"""
 		self.get_parameters()
 		xb, yb = self.load_additional_parameters()
 		df = self.load_file(self.data_path, self.fn, v=self.verbose)

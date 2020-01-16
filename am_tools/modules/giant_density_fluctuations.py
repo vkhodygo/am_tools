@@ -16,7 +16,7 @@ class GiantDensityFluctuations:
 	This class provides functions for data loading and for actual calculations of giant density fluctuations.
 	"""
 	@staticmethod
-	def load_file(fp_, file_, chs=100000, ci=(2, 3), cn=('x', 'y'), dt=float16, file_known=False, file_l=None, v=False):
+	def load_raw_file(fp_, file_, chs=100000, ci=(2, 3), dt=float16, file_known=False, file_l=None, verbose=False):
 		"""
 		This function reads required data from the file_ or, when all data is zipped, from file in data.zip.
 		:param fp_: file path template
@@ -30,39 +30,39 @@ class GiantDensityFluctuations:
 		:return: a pandas dataframe or None if there is no data to read/the data is corrupted
 		"""
 		file_path = fp_ % file_
-
+		col_names = ('x', 'y')
 		if not os.path.isfile(file_path):
 			if not os.path.isfile(fp_ % 'data.zip'):
-				print("\nNo (un)zipped data, skipping.\n" % file_) if v else None
+				print("\nNo (un)zipped data, skipping.\n" % file_) if verbose else None
 				return None
 			else:
 				try:
 					with ZipFile(fp_ % 'data.zip') as zf:
 						pass
 				except BadZipFile:
-					print("Corrupted zip, skipping. ") if v else None
+					print("Corrupted zip, skipping. ") if verbose else None
 					return None
 				resulting_file = ZipFile(fp_ % 'data.zip').open(file_)
 		else:
 			try:
 				read_csv(file_path, sep='\s+', engine='c', nrows=1)
 			except io.common.EmptyDataError:
-				print("\n%s is empty, skipping.\n" % file_) if v else None
+				print("\n%s is empty, skipping.\n" % file_) if verbose else None
 				return None
 			resulting_file = file_path
 
-		print("\nLoading the file, this might take some time\n") if v else None
-		df_, dt_ = DataFrame(), dict((x, dt) for x in cn)
+		print("\nLoading the file, this might take some time\n") if verbose else None
+		df_, dt_ = DataFrame(), dict((x, dt) for x in col_names)
 		if file_known:
 			index = 0
-			for x in read_csv(resulting_file, sep='\s+', engine='c', usecols=ci, names=cn, dtype=dt_, chunksize=chs):
+			for x in read_csv(resulting_file, sep='\s+', engine='c', usecols=ci, names=col_names, dtype=dt_, chunksize=chs):
 				df_ = concat([df_, x], ignore_index=True)
 				index += 1
 				sys.stdout.write("\rChunk %d/~%d" % (index, file_l))
 		else:
-			for x in read_csv(resulting_file, sep='\s+', engine='c', usecols=ci, names=cn, dtype=dt_, chunksize=chs):
+			for x in read_csv(resulting_file, sep='\s+', engine='c', usecols=ci, names=col_names, dtype=dt_, chunksize=chs):
 				df_ = concat([df_, x], ignore_index=True)
-		print("\nDone.\n") if v else None
+		print("\nDone.\n") if verbose else None
 		return df_
 
 	@staticmethod
@@ -91,7 +91,7 @@ class GiantDensityFluctuations:
 			return bins, factor * population, (xedges, yedges)
 
 	@staticmethod
-	def den_fl(x, y, av_density, edges):
+	def density_fluctuations(x, y, av_density, edges):
 		"""
 		This function calculates giant density fluctuations using provided particle positions and bin edges
 		:param x: x coordinate of particles
@@ -192,7 +192,7 @@ class GDFanalysis(GiantDensityFluctuations):
 			bins, av_d, edges_t = self.density(population=self.pop, domain_size=(self.size_x, self.size_y), bin_size=(x_, y_))
 			for i in range(self.samples):
 				i_min, i_max = i * self.pop, (i + 1) * self.pop
-				data[i, count] = self.den_fl(x_v[i_min:i_max], y_v[i_min:i_max], av_d, edges_t)
+				data[i, count] = self.density_fluctuations(x_v[i_min:i_max], y_v[i_min:i_max], av_d, edges_t)
 			count += 1
 
 		sleep(1) if self.verbose else None
@@ -224,6 +224,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		:param save_path: path to the file
 		:return: None
 		"""
+		savetxt(save_path % "gdf_processed_data.txt", data.T, fmt='%.2e')
 		return None
 
 	@staticmethod
@@ -249,7 +250,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		"""
 		self.get_parameters()
 		xb, yb = self.load_additional_parameters()
-		df = self.load_file(self.data_path, self.fn, v=self.verbose)
+		df = self.load_raw_file(self.data_path, self.fn, verbose=self.verbose)
 		data = self.general_sub_pipeline(df, xb, yb)
 		self.save_proc_data(data, self.data_path)
 		self.plot_figure(data, self.data_path)

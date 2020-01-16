@@ -33,25 +33,25 @@ class GiantDensityFluctuations:
 		col_names = ('x', 'y')
 		if not os.path.isfile(file_path):
 			if not os.path.isfile(fp_ % 'data.zip'):
-				print("\nNo (un)zipped data, skipping.\n" % file_) if verbose else None
+				verbose and print("\nNo (un)zipped data, skipping.\n" % file_)
 				return None
 			else:
 				try:
-					with ZipFile(fp_ % 'data.zip') as zf:
+					with ZipFile(fp_ % 'data.zip'):
 						pass
 				except BadZipFile:
-					print("Corrupted zip, skipping. ") if verbose else None
+					verbose and print("Corrupted zip, skipping. ")
 					return None
 				resulting_file = ZipFile(fp_ % 'data.zip').open(file_)
 		else:
 			try:
 				read_csv(file_path, sep='\s+', engine='c', nrows=1)
 			except io.common.EmptyDataError:
-				print("\n%s is empty, skipping.\n" % file_) if verbose else None
+				verbose and print("\n%s is empty, skipping.\n" % file_)
 				return None
 			resulting_file = file_path
 
-		print("\nLoading the file, this might take some time\n") if verbose else None
+		verbose and print("\nLoading the file, this might take some time\n")
 		df_, dt_ = DataFrame(), dict((x, dt) for x in col_names)
 		if file_known:
 			index = 0
@@ -62,7 +62,7 @@ class GiantDensityFluctuations:
 		else:
 			for x in read_csv(resulting_file, sep='\s+', engine='c', usecols=ci, names=col_names, dtype=dt_, chunksize=chs):
 				df_ = concat([df_, x], ignore_index=True)
-		print("\nDone.\n") if verbose else None
+		verbose and print("\nDone.\n")
 		return df_
 
 	@staticmethod
@@ -77,7 +77,7 @@ class GiantDensityFluctuations:
 		positions of bin edges for further 2d histogram construction
 		"""
 		if len(domain_size) != len(bin_size):
-			print("\nIncorrect domain or binning parameters, exiting.\n") if verbose else None
+			verbose and print("\nIncorrect domain or binning parameters, exiting.\n")
 			exit(1)
 		else:
 			bins = []
@@ -195,15 +195,15 @@ class GDFanalysis(GiantDensityFluctuations):
 				data[i, count] = self.density_fluctuations(x_v[i_min:i_max], y_v[i_min:i_max], av_d, edges_t)
 			count += 1
 
-		sleep(1) if self.verbose else None
+		self.verbose and sleep(1)
 
 		proceeded_data = zeros((3, len(xb) * len(yb)))
 		count = 0
-		print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("x_bin", "y_bin", "density", "mean", "std")) if self.verbose else None
+		self.verbose and print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("x_bin", "y_bin", "density", "mean", "std"))
 		for x_, y_ in product(xb, yb):
 			_, d, _ = self.density(population=self.pop, domain_size=(self.size_x, self.size_y), bin_size=(x_, y_))
 			m, s = mean(data[:, count]), std(data[:, count])
-			print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (x_, y_, d, m, s)) if self.verbose else None
+			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (x_, y_, d, m, s))
 			proceeded_data[0, count], proceeded_data[1, count], proceeded_data[2, count] = d, m, s
 			count += 1
 		return proceeded_data

@@ -6,9 +6,15 @@ from time import sleep
 from zipfile import ZipFile, BadZipFile
 
 import matplotlib.pyplot as plt
-from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, histogram2d, float16
+from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float16
+from fast_histogram import histogram2d
 from pandas import read_csv, DataFrame, concat, io
 from tqdm import tqdm
+import multiprocessing
+
+"""
+Local package installation: python -m pip install --user -e am_tools/
+"""
 
 
 class GiantDensityFluctuations:
@@ -86,20 +92,21 @@ class GiantDensityFluctuations:
 				f = int(domain_size[i] / bin_size[i])
 				bins.append(f)
 				factor /= f
-			edges = (linspace(0, domain_size[0], bins[0] + 1), linspace(0, domain_size[1], bins[1] + 1))
-			return bins, factor * population, edges
+
+			return factor * population, bins
 
 	@staticmethod
-	def density_fluctuations(x, y, av_density, edges):
+	def density_fluctuations(x, y, av_density, range_, edges):
 		"""
 		This function calculates giant density fluctuations using provided particle positions and bin edges
 		:param x: x coordinate of particles
 		:param y: y coordinate of particles
 		:param av_density: average bin density
+		:param range_: the range of x, y coordinates. By default the lower bound is 0, thus only the upper bound is provided
 		:param edges: bin edges
 		:return: the normalized value of density fluctuations
 		"""
-		h, _, _ = histogram2d(x, y, bins=(edges[0], edges[1]))
+		h = histogram2d(x, y, range=[[0, range_[0]], [0, range_[1]]], bins=[edges[0], edges[1]])
 		h -= av_density
 		return sqrt(mean(multiply(h, h))) / sqrt(av_density)
 
@@ -186,26 +193,26 @@ class GDFanalysis(GiantDensityFluctuations):
 		x_v, y_v = df_['x'].to_numpy(), df_['y'].to_numpy()  # turn to numpy first, it's ~2 times faster
 		iterator = tqdm(product(xb, yb), total=len(xb) * len(yb)) if self.verbose else product(xb, yb)
 
-		count = 0
+		count, domain_size_t = 0, (self.size_x, self.size_y)
 		for x_, y_ in iterator:
-			bins, av_d, edges_t = self.density(population=self.pop, domain_size=(self.size_x, self.size_y), bin_size=(x_, y_))
+			av_d, bins_t = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(x_, y_))
 			for i in range(self.samples):
 				i_min, i_max = i * self.pop, (i + 1) * self.pop
-				data[i, count] = self.density_fluctuations(x_v[i_min:i_max], y_v[i_min:i_max], av_d, edges_t)
+				data[i, count] = self.density_fluctuations(x_v[i_min:i_max], y_v[i_min:i_max], av_d, domain_size_t, bins_t)
 			count += 1
 
 		self.verbose and sleep(1)
 
-		proceeded_data = zeros((3, len(xb) * len(yb)))
-		count = 0
+		proc_data = zeros((5, len(xb) * len(yb)))
+		c_ = 0
 		self.verbose and print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("x_bin", "y_bin", "density", "mean", "std"))
 		for x_, y_ in product(xb, yb):
-			_, d, _ = self.density(population=self.pop, domain_size=(self.size_x, self.size_y), bin_size=(x_, y_))
-			m, s = mean(data[:, count]), std(data[:, count])
+			d, _ = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(x_, y_))
+			m, s = mean(data[:, c_]), std(data[:, c_])
 			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (x_, y_, d, m, s))
-			proceeded_data[0, count], proceeded_data[1, count], proceeded_data[2, count] = d, m, s
+			proc_data[0, c_], proc_data[1, c_], proc_data[2, c_], proc_data[3, c_], proc_data[4, c_] = x_, y_, d, m, s
 			count += 1
-		return proceeded_data
+		return proc_data
 
 	@staticmethod
 	def data_reduce(data):
@@ -223,7 +230,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		:param save_path: path to the file
 		:return: None
 		"""
-		savetxt(save_path % "gdf_processed_data.txt", data.T, fmt='%.2e')
+		savetxt(save_path % "gdf_processed_data.txt", data.T, fmt='%.4e')
 		return None
 
 	@staticmethod
@@ -237,8 +244,9 @@ class GDFanalysis(GiantDensityFluctuations):
 		plt.figure()
 		plt.yscale('log')
 		plt.xscale('log')
-		plt.errorbar(data[0, :], data[1, :], yerr=data[2, :], fmt='o')
+		plt.errorbar(data[2, :], data[3, :], yerr=data[4, :], fmt='o')
 		plt.savefig(save_path % "plot.png")
+		plt.close()
 		return None
 
 	def serial_data_pipeline(self):
@@ -255,5 +263,8 @@ class GDFanalysis(GiantDensityFluctuations):
 		self.plot_figure(data, self.data_path)
 		return None
 
-	def parallel_data_pipeline(self):
+	def parallel_data_pipeline_single_file(self):
+		pass
+
+	def parallel_data_pipeline_multiple_files(self):
 		pass

@@ -129,10 +129,11 @@ class GDFanalysis(GiantDensityFluctuations):
 			"verbose": False,
 			"cluster": False,
 			"min_range": 1,
-			"max_range": 100}
+			"max_range": 100,
+			"samples": 10000}
 		self.verbose = False
 		self.cluster = False
-		self.samples = 80000
+		self.samples = None
 
 	def get_parameters(self):
 		"""
@@ -159,7 +160,8 @@ class GDFanalysis(GiantDensityFluctuations):
 		self.fn = sys_par["filename"] if "filename" in sys_par else self.default_values["filename"]
 		self.verbose = sys_par["verbose"] if "verbose" in sys_par else self.default_values["verbose"]
 		self.cluster = sys_par["cluster"] if "cluster" in sys_par else self.default_values["cluster"]
-
+		self.samples = sys_par["samples"] if "samples" in sys_par else self.default_values["samples"]
+		
 		if self.cluster:
 			self.min_range = sys_par["min_range"] if "min_range" in sys_par else self.default_values["min_range"]
 			self.max_range = sys_par["max_range"] if "max_range" in sys_par else self.default_values["max_range"]

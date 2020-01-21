@@ -213,7 +213,7 @@ class GDFanalysis(GiantDensityFluctuations):
 			m, s = mean(data[:, c_]), std(data[:, c_])
 			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (x_, y_, d, m, s))
 			proc_data[0, c_], proc_data[1, c_], proc_data[2, c_], proc_data[3, c_], proc_data[4, c_] = x_, y_, d, m, s
-			count += 1
+			c_ += 1
 		return proc_data
 
 	@staticmethod

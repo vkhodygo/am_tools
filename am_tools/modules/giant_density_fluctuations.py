@@ -83,8 +83,7 @@ class GiantDensityFluctuations:
 		positions of bin edges for further 2d histogram construction
 		"""
 		if len(domain_size) != len(bin_size):
-			verbose and print("\nIncorrect domain or binning parameters, exiting.\n")
-			exit(1)
+			raise ValueError("Incorrect domain or binning parameters, exiting.")
 		else:
 			bins = []
 			factor = 1
@@ -144,15 +143,15 @@ class GDFanalysis(GiantDensityFluctuations):
 		"""
 		try:
 			sys_par = json.load(sys.stdin)
-		except json.JSONDecodeError:
-			print('Exiting on Invalid JSON format')
-			sys.exit()
+			if type(sys_par) is not dict:
+				raise ValueError('Incorrect input format, should be a JSON string')
+		except json.JSONDecodeError as e:
+			raise e
 
 		if "path" in sys_par:
 			self.data_path = sys_par["path"]
 		else:
-			print("\nNo data path provided, exiting.")
-			sys.exit()
+			raise ValueError("\nNo data path provided, exiting.")
 
 		self.pop = sys_par["population"] if "population" in sys_par else self.default_values["population"]
 		self.size_x = sys_par["size_x"] if "size_x" in sys_par else self.default_values["size_x"]

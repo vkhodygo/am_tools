@@ -85,8 +85,7 @@ class GiantDensityFluctuations:
 		if len(domain_size) != len(bin_size):
 			raise ValueError("Incorrect domain or binning parameters, exiting.")
 		else:
-			bins = []
-			factor = 1
+			bins, factor = [], 1
 			for i in range(len(domain_size)):
 				f = int(domain_size[i] / bin_size[i])
 				bins.append(f)
@@ -173,8 +172,8 @@ class GDFanalysis(GiantDensityFluctuations):
 		:return: two arrays, each of them contains bin sizes in the corresponding direction
 		"""
 		# TODO replace this function
-		f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5]
-		f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2]
+		f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5, 1]
+		f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 1]
 		xbinsizes = multiply(f1, 120)
 		ybinsizes = multiply(f2, 12)
 		xbinsizes = concatenate((xbinsizes, array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10, 15, 20, 30])))
@@ -194,26 +193,23 @@ class GDFanalysis(GiantDensityFluctuations):
 		x_v, y_v = df_['x'].to_numpy(), df_['y'].to_numpy()  # turn to numpy first, it's ~2 times faster
 		iterator = tqdm(product(xb, yb), total=len(xb) * len(yb)) if self.verbose else product(xb, yb)
 
-		count, domain_size_t = 0, (self.size_x, self.size_y)
-		for x_, y_ in iterator:
-			av_d, bins_t = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(x_, y_))
+		domain_size_t = (self.size_x, self.size_y)
+		for count, bin_dim in enumerate(iterator):
+			av_d, bins_t = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(bin_dim[0], bin_dim[1]))
 			for i in range(self.samples):
 				i_min, i_max = i * self.pop, (i + 1) * self.pop
 				data[i, count] = self.density_fluctuations(x_v[i_min:i_max], y_v[i_min:i_max], av_d, domain_size_t, bins_t)
-			count += 1
 
 		self.verbose and sleep(1)
 
-		proc_data = zeros((5, len(xb) * len(yb)))
-		c_ = 0
-		self.verbose and print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("x_bin", "y_bin", "density", "mean", "std"))
-		for x_, y_ in product(xb, yb):
-			d, _ = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(x_, y_))
-			m, s = mean(data[:, c_]), std(data[:, c_])
-			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (x_, y_, d, m, s))
-			proc_data[0, c_], proc_data[1, c_], proc_data[2, c_], proc_data[3, c_], proc_data[4, c_] = x_, y_, d, m, s
-			c_ += 1
-		return proc_data
+		prd = zeros((5, len(xb) * len(yb)))
+		self.verbose and print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("bin_dim_x", "bin_dim_y", "density", "mean", "std"))
+		for count, bin_dim in enumerate(product(xb, yb)):
+			d, _ = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(bin_dim[0], bin_dim[1]))
+			m, s = mean(data[:, count]), std(data[:, count])
+			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (bin_dim[0], bin_dim[1], d, m, s))
+			prd[0, count], prd[1, count], prd[2, count], prd[3, count], prd[4, count] = bin_dim[0], bin_dim[1], d, m, s
+		return prd
 
 	@staticmethod
 	def data_reduce(data):

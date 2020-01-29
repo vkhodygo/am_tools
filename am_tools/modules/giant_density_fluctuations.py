@@ -6,7 +6,7 @@ from time import sleep
 from zipfile import ZipFile, BadZipFile
 
 import matplotlib.pyplot as plt
-from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float16
+from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float16, all
 from fast_histogram import histogram2d
 from pandas import read_csv, DataFrame, concat, io
 from tqdm import tqdm
@@ -120,7 +120,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		self.fn = None
 		self.default_values = {
 			"size_x": 120.0,
-			"size_y": 12.0,
+			"size_y": 13.0,
 			"population": 961,
 			"path": None,
 			"filename": "simulation.main.data.bin",
@@ -150,7 +150,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		if "path" in sys_par:
 			self.data_path = sys_par["path"]
 		else:
-			raise ValueError("\nNo data path provided, exiting.")
+			raise ValueError("No data path provided, exiting.")
 
 		self.pop = sys_par["population"] if "population" in sys_par else self.default_values["population"]
 		self.size_x = sys_par["size_x"] if "size_x" in sys_par else self.default_values["size_x"]
@@ -165,19 +165,17 @@ class GDFanalysis(GiantDensityFluctuations):
 			self.max_range = sys_par["max_range"] if "max_range" in sys_par else self.default_values["max_range"]
 		return None
 
-	@staticmethod
-	def load_additional_parameters():
+	def load_additional_parameters(self):
 		"""
 		Basic function that retuns bin sizes for the default confinement geometry
 		:return: two arrays, each of them contains bin sizes in the corresponding direction
 		"""
 		# TODO replace this function
 		f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5, 1]
-		f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 1]
-		xbinsizes = multiply(f1, 120)
-		ybinsizes = multiply(f2, 12)
+		f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 1/24, 1/16, 1/12, 1/8, 1/6, 1/3]
+		xbinsizes = multiply(f1, self.size_x)
+		ybinsizes = multiply(f2, self.size_y)
 		xbinsizes = concatenate((xbinsizes, array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10, 15, 20, 30])))
-		ybinsizes = concatenate((ybinsizes, array([0.5, 0.75, 1, 1.5, 2, 3, 4, 6])))
 		return xbinsizes, ybinsizes
 
 	def general_sub_pipeline(self, df_, xb, yb):
@@ -191,6 +189,8 @@ class GDFanalysis(GiantDensityFluctuations):
 		"""
 		data = zeros((self.samples, len(xb) * len(yb)))
 		x_v, y_v = df_['x'].to_numpy(), df_['y'].to_numpy()  # turn to numpy first, it's ~2 times faster
+		x_v = x_v if all(x_v >= 0) else x_v + self.size_x / 2
+		y_v = y_v + 0.5 if all(y_v >= 0) else y_v + self.size_y / 2  # FIXME need a solution for the variety of data
 		iterator = tqdm(product(xb, yb), total=len(xb) * len(yb)) if self.verbose else product(xb, yb)
 
 		domain_size_t = (self.size_x, self.size_y)

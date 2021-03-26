@@ -72,26 +72,21 @@ class GiantDensityFluctuations:
 		return df_
 
 	@staticmethod
-	def density(population, domain_size, bin_size, verbose=False):
+	def average_number_density(population, domain_size, bin_size):
 		"""
 		This function calculates the average number density per bin
-		:param population: number of particles
+		:param population: integer, the total number of particles
 		:param domain_size: a tuple that contains the sizes of a rectangular domain
 		:param bin_size: a tuple that contains the sizes of a single bin
-		:param verbose: if True, the function prints an error message in the case of incorrect parameters
-		:return: bins, an array containing the number of bins in x and y directions, average bin density,
-		positions of bin edges for further 2d histogram construction
+		:return: float, average number of particles per bin i.e., number density,
+		n_bins, an array containing the number of bins in x and y directions
 		"""
 		if len(domain_size) != len(bin_size):
 			raise ValueError("Incorrect domain or binning parameters, exiting.")
 		else:
-			bins, factor = [], 1
-			for i in range(len(domain_size)):
-				f = int(domain_size[i] / bin_size[i])
-				bins.append(f)
-				factor /= f
-
-			return factor * population, bins
+			n_bins = (int(domain_size[0] / bin_size[0]), int(domain_size[1] / bin_size[1]))
+			factor = 1 / (n_bins[0] * n_bins[1])
+			return factor * population, n_bins
 
 	@staticmethod
 	def density_fluctuations(x, y, av_density, range_, edges):
@@ -105,8 +100,35 @@ class GiantDensityFluctuations:
 		:return: the normalized value of density fluctuations
 		"""
 		h = histogram2d(x, y, range=[[0, range_[0]], [0, range_[1]]], bins=[edges[0], edges[1]])
-		h -= av_density
-		return sqrt(mean(multiply(h, h))) / sqrt(av_density)
+		e_n_squared = mean(h*h)
+		e_squared_n = av_density * av_density
+		deviation = sqrt(e_n_squared - e_squared_n)
+		normed_deviation = deviation / sqrt(av_density)
+		return normed_deviation
+
+	@staticmethod
+	def density_fluctuations1(x, y, average_density, range_, n_bins_):
+		"""
+		This function calculates giant density fluctuations using provided particle positions and bin edges.
+		*NOTE*: this particular version of the algorithm is sub-optimal i.e., it is possible to make it faster
+		by finding the square of a histogram first and then finding its mean. However, due to usage of a less precise
+		alternative (some particles can be missing in the histogram) to the numpy histogram2d that might result
+		in negative values of the variance.
+		Thus, we subtract the mean value first and find the square next potentially having slightly incorrect results.
+		However, large datasets should not suffer from this significantly.
+		FIXME try to use the number of particles in all bins instead od system population. Check how fast it is.
+		:param x: x coordinate of particles
+		:param y: y coordinate of particles
+		:param average_density: average number of particles per bin
+		:param range_: the range of x, y coordinates. By default the lower bound is 0, thus only the upper bound is provided
+		:param n_bins_: number of bins in x,y directions
+		:return: the normalized value of density fluctuations
+		"""
+		h = histogram2d(x, y, range=[[0, range_[0]], [0, range_[1]]], bins=[n_bins_[0], n_bins_[1]])
+		h -= average_density
+		h *= h # squared std is marked as variance
+		normed_std = sqrt(mean(h) / average_density)
+		return normed_std
 
 
 class GDFanalysis(GiantDensityFluctuations):
@@ -120,7 +142,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		self.fn = None
 		self.default_values = {
 			"size_x": 120.0,
-			"size_y": 13.0,
+			"size_y": 12.0,
 			"population": 961,
 			"path": None,
 			"filename": "simulation.main.data.bin",
@@ -165,50 +187,79 @@ class GDFanalysis(GiantDensityFluctuations):
 			self.max_range = sys_par["max_range"] if "max_range" in sys_par else self.default_values["max_range"]
 		return None
 
-	def load_additional_parameters(self):
+	@staticmethod
+	def generate_bin_sizes(domain_shape='rectangle', domain_sizes=None):
 		"""
 		Basic function that retuns bin sizes for the default confinement geometry
 		:return: two arrays, each of them contains bin sizes in the corresponding direction
 		"""
-		# TODO replace this function
-		f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5, 1]
-		f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 1/24, 1/16, 1/12, 1/8, 1/6, 1/3]
-		xbinsizes = multiply(f1, self.size_x)
-		ybinsizes = multiply(f2, self.size_y)
-		xbinsizes = concatenate((xbinsizes, array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10, 15, 20, 30])))
-		return xbinsizes, ybinsizes
+		if domain_shape == 'rectangle':
+			dxarr = array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 10, 12, 15, 20, 24, 30, 40, 60])
+			#dyarr = array([0.5, 0.75, 1, 1.5, 2, 3, 4, 6])
+			y_fr = [1/24, 1/16, 1/12, 1/8, 1/6, 1/4, 1/3, 1/2]
+			dyarr = multiply(y_fr, domain_sizes[1])
+			bin_sizes = [bp for bp in product(dxarr, dyarr)]
+			#n_ = arange(1, 51)
+			#channel_fractions = divide(1, n_)
+			#bin_sizes = [tuple([fraction * d_size for d_size in domain_sizes]) for fraction in channel_fractions]
+			#bin_sizes = [tuple([13 * fraction, 13 * fraction]) for fraction in channel_fractions]
+			#f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5, 1]
+			#f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 1/24, 1/16, 1/12, 1/8, 1/6, 1/3]
+			#xbinsizes = multiply(f1, domain_sizes[0])
+			#xbinsizes = concatenate((xbinsizes, array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10, 15, 20, 30])))
+			#ybinsizes = multiply(f2, domain_sizes[1])
+			#bin_sizes_ = [()] * (len(xbinsizes) * len(ybinsizes))
+			#for i, el in enumerate(product(xbinsizes, ybinsizes)):
+			#	bin_sizes_[i] = el
+			#bin_sizes = bin_sizes_
+			#bin_sizes = concatenate((bin_sizes, bin_sizes_))
+			#print(bin_sizes)
+			return bin_sizes
+		elif domain_shape == 'disk':
+			raise ValueError('Unsupported domain type')
+		elif domain_shape == 'square':
+			raise ValueError('Unsupported domain type')
+		else:
+			raise ValueError('Unsupported domain type')
 
-	def general_sub_pipeline(self, df_, xb, yb):
+		# TODO replace this function
+		# f1 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.5, 1]
+		# f2 = [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 1/24, 1/16, 1/12, 1/8, 1/6, 1/3]
+		# xbinsizes = multiply(f1, self.size_x)
+		# ybinsizes = multiply(f2, self.size_y)
+		# xbinsizes = concatenate((xbinsizes, array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10, 15, 20, 30])))
+		#return xbinsizes, ybinsizes
+
+	def general_sub_pipeline(self, df_, bins):
 		"""
 		This function goes through the provided number of samples and calculates density fluctuations for
 		all provided bin sizes
 		:param df_: a pandas dataframe
-		:param xb: bin sizes in x direction
-		:param yb: bin sizes in y direction
+		:param bins: array of tuples, each of them contains bin sizes
 		:return: an array containing the resulting data
 		"""
-		data = zeros((self.samples, len(xb) * len(yb)))
+		data = zeros((self.samples, len(bins)))
 		x_v, y_v = df_['x'].to_numpy(), df_['y'].to_numpy()  # turn to numpy first, it's ~2 times faster
-		x_v = x_v if all(x_v >= 0) else x_v + self.size_x / 2
-		y_v = y_v + 0.5 if all(y_v >= 0) else y_v + self.size_y / 2  # FIXME need a solution for the variety of data
-		iterator = tqdm(product(xb, yb), total=len(xb) * len(yb)) if self.verbose else product(xb, yb)
+		#x_v = x_v if all(x_v >= 0) else x_v + self.size_x / 2
+		#y_v = y_v + 0.5 if all(y_v >= 0) else y_v + self.size_y / 2  # FIXME need a solution for the variety of data
+		iterator = tqdm(bins, total=len(bins)) if self.verbose else bins
 
 		domain_size_t = (self.size_x, self.size_y)
-		for count, bin_dim in enumerate(iterator):
-			av_d, bins_t = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(bin_dim[0], bin_dim[1]))
+		for count, bin_dim_t in enumerate(iterator):
+			av_d, n_bins_t = self.average_number_density(population=self.pop, domain_size=domain_size_t, bin_size=bin_dim_t)
 			for i in range(self.samples):
 				i_min, i_max = i * self.pop, (i + 1) * self.pop
-				data[i, count] = self.density_fluctuations(x_v[i_min:i_max], y_v[i_min:i_max], av_d, domain_size_t, bins_t)
+				data[i, count] = self.density_fluctuations1(x_v[i_min:i_max], y_v[i_min:i_max], av_d, domain_size_t, n_bins_t)
 
 		self.verbose and sleep(1)
 
-		prd = zeros((5, len(xb) * len(yb)))
+		prd = zeros((5, len(bins)))
 		self.verbose and print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("bin_dim_x", "bin_dim_y", "density", "mean", "std"))
-		for count, bin_dim in enumerate(product(xb, yb)):
-			d, _ = self.density(population=self.pop, domain_size=domain_size_t, bin_size=(bin_dim[0], bin_dim[1]))
+		for count, bin_dim_t in enumerate(bins):
+			d, _ = self.average_number_density(population=self.pop, domain_size=domain_size_t, bin_size=bin_dim_t)
 			m, s = mean(data[:, count]), std(data[:, count])
-			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (bin_dim[0], bin_dim[1], d, m, s))
-			prd[0, count], prd[1, count], prd[2, count], prd[3, count], prd[4, count] = bin_dim[0], bin_dim[1], d, m, s
+			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (bin_dim_t[0], bin_dim_t[1], d, m, s))
+			prd[0, count], prd[1, count], prd[2, count], prd[3, count], prd[4, count] = bin_dim_t[0], bin_dim_t[1], d, m, s
 		return prd
 
 	@staticmethod
@@ -227,7 +278,7 @@ class GDFanalysis(GiantDensityFluctuations):
 		:param save_path: path to the file
 		:return: None
 		"""
-		savetxt(save_path % "gdf_processed_data.txt", data.T, fmt='%.4e')
+		savetxt(save_path % "gdf_processed_data.txt", data.T, fmt='%.6e')
 		return None
 
 	@staticmethod
@@ -269,9 +320,12 @@ class GDFanalysis(GiantDensityFluctuations):
 		:return: None
 		"""
 		self.get_parameters()
-		xb, yb = self.load_additional_parameters()
+		bins = self.generate_bin_sizes(domain_sizes=(self.size_x, self.size_y))
 		df = self.load_raw_file(self.data_path, self.fn, verbose=self.verbose)
-		data = self.general_sub_pipeline(df, xb, yb)
+		if df is None:
+			raise ValueError("No data provided!")
+		self.check_data_size(df, self.pop, self.samples)
+		data = self.general_sub_pipeline(df, bins)
 		self.save_proc_data(data, self.data_path)
 		self.plot_figure(data, self.data_path)
 		return None

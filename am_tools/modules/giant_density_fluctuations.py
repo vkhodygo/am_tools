@@ -6,12 +6,12 @@ from time import sleep
 from zipfile import ZipFile, BadZipFile
 
 import matplotlib.pyplot as plt
-from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float16, all
+from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float32, all, arange, divide, empty
 from fast_histogram import histogram2d
 from pandas import read_csv, DataFrame, concat, io
 from tqdm import tqdm
 import multiprocessing
-
+import warnings
 """
 Local package installation: python -m pip install --user -e am_tools/
 """
@@ -22,7 +22,7 @@ class GiantDensityFluctuations:
 	This class provides functions for data loading and for actual calculations of giant density fluctuations.
 	"""
 	@staticmethod
-	def load_raw_file(fp_, file_, chs=100000, ci=(2, 3), dt=float16, file_known=False, file_l=None, verbose=False):
+	def load_raw_file(fp_, file_, chs=100000, ci=(2, 3), dt=float32, file_known=False, file_l=None, verbose=False):
 		"""
 		This function reads required data from the file_ or, when all data is zipped, from file in data.zip.
 		:param fp_: file path template

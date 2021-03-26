@@ -246,6 +246,22 @@ class GDFanalysis(GiantDensityFluctuations):
 		plt.close()
 		return None
 
+	@staticmethod
+	def check_data_size(df_, population, n_samples):
+		"""
+		This function provides a simple check for initial data.
+		The total number of entries in the dataframe has to be greater or equal to
+		the product of the number of particles and the number of samples.
+
+		:param df_: a pandas dataframe to check
+		:param population: the number of elements in a given system, integer
+		:param n_samples: the number of snapshots, integer
+		:return: None
+		"""
+		total_data_length = len(df_.index)
+		assert population * n_samples <= total_data_length, "Incomplete data/incorrect parameters"
+		return None
+
 	def serial_data_pipeline(self):
 		"""
 		This function is a pipeline for serial data processing.

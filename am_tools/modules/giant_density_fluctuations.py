@@ -189,6 +189,7 @@ class GDFanalysis(GiantDensityFluctuations):
 
 	@staticmethod
 	def generate_bin_sizes(domain_shape='rectangle', domain_sizes=None):
+		#FIXME add two parameters allowing passing the bins
 		"""
 		Basic function that retuns bin sizes for the default confinement geometry
 		:return: two arrays, each of them contains bin sizes in the corresponding direction

@@ -6,7 +6,7 @@ from time import sleep
 from zipfile import ZipFile, BadZipFile
 
 import matplotlib.pyplot as plt
-from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float32, all, arange, divide, empty
+from numpy import multiply, concatenate, array, zeros, savetxt, mean, std, sqrt, linspace, float32, all, arange, divide, empty, append
 from fast_histogram import histogram2d
 from pandas import read_csv, DataFrame, concat, io
 from tqdm import tqdm
@@ -89,6 +89,20 @@ class GiantDensityFluctuations:
 			return factor * population, n_bins
 
 	@staticmethod
+	def get_bin_number(domain_size, bin_size):
+		"""
+		This function calculates the average number density per bin
+		:param domain_size: a tuple that contains the sizes of a rectangular domain
+		:param bin_size: a tuple that contains the sizes of a single bin
+		:return: n_bins, an array containing the number of bins in x and y directions
+		"""
+		if len(domain_size) != len(bin_size):
+			raise ValueError("Incorrect domain or binning parameters, exiting.")
+		else:
+			n_bins = (int(domain_size[0] / bin_size[0]), int(domain_size[1] / bin_size[1]))
+			return n_bins
+
+	@staticmethod
 	def density_fluctuations(x, y, av_density, range_, edges):
 		"""
 		This function calculates giant density fluctuations using provided particle positions and bin edges
@@ -129,6 +143,18 @@ class GiantDensityFluctuations:
 		h *= h # squared std is marked as variance
 		normed_std = sqrt(mean(h) / average_density)
 		return normed_std
+
+	@staticmethod
+	def mean_density_per_bin(total_x, total_y, range_, n_bins_, n_samples):
+		h = histogram2d(total_x, total_y, range=[[0, range_[0]], [0, range_[1]]], bins=[n_bins_[0], n_bins_[1]])
+		return h / n_samples
+
+	@staticmethod
+	def density_variations(sample_x, sample_y, range_, n_bins_, mean_density_squared):
+		h = histogram2d(sample_x, sample_y, range=[[0, range_[0]], [0, range_[1]]], bins=[n_bins_[0], n_bins_[1]])
+		h *= h
+		var_ = h - mean_density_squared
+		return var_
 
 
 class GDFanalysis(GiantDensityFluctuations):
@@ -239,29 +265,45 @@ class GDFanalysis(GiantDensityFluctuations):
 		:param bins: array of tuples, each of them contains bin sizes
 		:return: an array containing the resulting data
 		"""
-		data = zeros((self.samples, len(bins)))
+		resulting_data = zeros((2, 1))
 		x_v, y_v = df_['x'].to_numpy(), df_['y'].to_numpy()  # turn to numpy first, it's ~2 times faster
 		#x_v = x_v if all(x_v >= 0) else x_v + self.size_x / 2
 		#y_v = y_v + 0.5 if all(y_v >= 0) else y_v + self.size_y / 2  # FIXME need a solution for the variety of data
 		iterator = tqdm(bins, total=len(bins)) if self.verbose else bins
 
 		domain_size_t = (self.size_x, self.size_y)
+		print("data transformed")
 		for count, bin_dim_t in enumerate(iterator):
-			av_d, n_bins_t = self.average_number_density(population=self.pop, domain_size=domain_size_t, bin_size=bin_dim_t)
+			bin_number = self.get_bin_number(domain_size=domain_size_t, bin_size=bin_dim_t)
+			mean_density_array = self.mean_density_per_bin(total_x=x_v, total_y=y_v, range_=domain_size_t, n_bins_=bin_number, n_samples=self.samples)
+			mean_density_sq = mean_density_array * mean_density_array
+			average_density_variation = zeros(bin_number)
 			for i in range(self.samples):
 				i_min, i_max = i * self.pop, (i + 1) * self.pop
-				data[i, count] = self.density_fluctuations1(x_v[i_min:i_max], y_v[i_min:i_max], av_d, domain_size_t, n_bins_t)
+				d_var = self.density_variations(sample_x=x_v[i_min:i_max], sample_y=y_v[i_min:i_max], range_=domain_size_t, n_bins_=bin_number, mean_density_squared=mean_density_sq)
+				average_density_variation += d_var
+			average_density_variation /= self.samples
 
-		self.verbose and sleep(1)
+			cell_count = average_density_variation.shape[0] * average_density_variation.shape[1]
+			partial_result = zeros((2, cell_count))
+			#print(partial_result.shape)
+			#print(mean_density_array)
+			#print(average_density_variation)
+			#print(mean_density_array.shape, average_density_variation.shape)
+			for cumul_index in range(cell_count):
+				x_index, y_index = cumul_index // average_density_variation.shape[1], cumul_index % average_density_variation.shape[1]
+				partial_result[0][cumul_index], partial_result[1][cumul_index] = mean_density_array[x_index][y_index], average_density_variation[x_index][y_index]
+				#print(x_index, y_index)
+			# TODO more pythonic way
+			# FIXME zeros
 
-		prd = zeros((5, len(bins)))
-		self.verbose and print("%-8.s %-8.s %-8.s %-8.s %-8.s" % ("bin_dim_x", "bin_dim_y", "density", "mean", "std"))
-		for count, bin_dim_t in enumerate(bins):
-			d, _ = self.average_number_density(population=self.pop, domain_size=domain_size_t, bin_size=bin_dim_t)
-			m, s = mean(data[:, count]), std(data[:, count])
-			self.verbose and print("%-8.2f %-8.2f %-8.2f %-8.2f %-8.2e" % (bin_dim_t[0], bin_dim_t[1], d, m, s))
-			prd[0, count], prd[1, count], prd[2, count], prd[3, count], prd[4, count] = bin_dim_t[0], bin_dim_t[1], d, m, s
-		return prd
+			#print("\n\n\n\n\n")
+			#print(resulting_data)
+			#print(partial_result)
+			resulting_data = append(resulting_data, partial_result, axis=1)
+		#print(resulting_data.shape)
+		#print(resulting_data)
+		return resulting_data
 
 	@staticmethod
 	def data_reduce(data):
